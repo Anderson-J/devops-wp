@@ -1,0 +1,60 @@
+name: CI - Build e Push da Imagem WordPress
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  IMAGE_NAME: anderaoliv/wordpress-pt_br
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Log in no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extrair metadados do Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
+      - name: Construir a imagem Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false # Importante: não envia a imagem ainda, apenas constrói
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Carrega a imagem no daemon do Docker local para que o scanner possa encontrá-la
+          load: true
+
+      - name: Scan de vulnerabilidades da imagem com Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: 'table'
+          # Falha o pipeline se encontrar vulnerabilidades de criticidade ALTA ou CRÍTICA
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          # Ignora vulnerabilidades que ainda não possuem correção oficial
+          ignore-unfixed: true
+
+      # Este passo só será executado se todos os anteriores, incluindo o scan, forem bem-sucedidos.
+      - name: Push da imagem para o Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
