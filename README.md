@@ -26,7 +26,7 @@ Este repositório contém a solução completa para o Desafio Técnico de Analis
 
     > A containerização foi o primeiro passo, com um Dockerfile projetado com foco em segurança e otimização. As decisões tomadas aqui foram tomadas focando na performance e segurança de todo o ciclo de vida da aplicação.
 
-    1. Decisões Técnicas Implementadas
+    - Decisões Técnicas Implementadas
 
         - Segurança (Usuário Não-Root)
             Para mitigar o impacto de possíveis vulnerabilidades, o contêiner executa o processo do Apache com o usuário de baixo privilégio www-data.
@@ -34,12 +34,12 @@ Este repositório contém a solução completa para o Desafio Técnico de Analis
         - Porta Não Privilegiada (8080)
             Como o contêiner roda com um usuário não-root, ele não tem permissão para usar portas abaixo de 1024. O Apache foi reconfigurado para escutar na porta 8080, seguindo a prática do "menor privilegio".
 
-    2. Análise de decisões de arquitetura do Dockerfile
+    - Análise de decisões de arquitetura do Dockerfile
 
         - Justificativa da Imagem Base
             > php:8.2-apache vs. outras alternativas. A escolha da imagem `php:8.2-apache` foi uma decisão intencional, baseada em manter o equilíbrio entre controle, simplicidade e segurança.
 
-        1. Comparação de alternativas
+        - Comparação de alternativas
 
             `wordpress:latest`
                 A imagem oficial do WordPress é uma "caixa-preta" que, apesar de ser simples, oferece menos controle sobre a configuração do Apache, as extensões PHP e otimizações de segurança. Decidi construir a imagem a partir da `php:apache` pois conseguiria demonstrar entendimento mais profundo da stack, de modo que instalei apenas as extensões PHP necessárias, tendo assim controle total sobre a configuração do servidor web, isso foi essencial para implementar ajustes de segurança como o da porta não privilegiada citada anteriormente.
@@ -51,7 +51,7 @@ Este repositório contém a solução completa para o Desafio Técnico de Analis
                 `php:8.2-apache`
                     Representa o melhor ponto de equilíbrio para este projeto, oferecendo o controle necessário para aplicar as melhores práticas sem adicionar complexidade desnecessária na proposta e levando em conta o estágio de modernização.
 
-    3. Análise sobre multi-stage builds (cenário atual e evolução futura)
+    - Análise sobre multi-stage builds (cenário atual e evolução futura)
 
         > A ausência de multi-stage build no Dockerfile também foi uma decisão intencional.
 
@@ -83,7 +83,7 @@ Este repositório contém a solução completa para o Desafio Técnico de Analis
 
     ***Arquivos: `terraform/*.tf`***
 
-    1. Infraestrutura como Código (IaC)
+    - Infraestrutura como Código (IaC)
 
         Toda a infraestrutura na AWS é gerenciada de forma declarativa com o Terraform. A arquitetura foi projetada para alta disponibilidade, utilizando duas Zonas de Disponibilidade (AZs) para distribuir recursos como sub redes, o Aplication Load Balancer (ALB) e as tarefas no ECS, garantindo que a falha de um único data center não derrube a aplicação.
 
@@ -143,3 +143,4 @@ Este repositório contém a solução completa para o Desafio Técnico de Analis
 8. Como Destruir a Infraestrutura
 
     Para remover todos os recursos criados na AWS, navegue até a pasta terraform e execute terraform destroy.
+
