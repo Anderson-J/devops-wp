@@ -1,139 +1,145 @@
 # Desafio Técnico – Solução DevOps para Aplicação PHP (WordPress)
 
-Este repositório contém a solução completa para o Desafio Técnico de Analista DevOps. O objetivo foi modernizar o ciclo de vida de uma aplicação PHP legada, usando o WordPress como um caso de estudo realista. A solução abrange desde a containerização segura até o provisionamento de uma infraestrutura resiliente e automatizada na AWS com Terraform, culminando em uma estratégia de observabilidade para produção.
+Este repositório contém a solução completa para o Desafio Técnico de Analista DevOps. O objetivo foi modernizar o ciclo de vida de uma aplicação PHP legada, usei o WordPress como um estudo de caso realista. A solução abrange desde a containerização segura e otimizada até o provisionamento de uma infraestrutura resiliente na AWS com Terraform, finalizando com uma estratégia de implantação contínua e observabilidade.
 
-## 1\. Visão Geral da Solução
+1. Visão Geral da Solução
 
-O projeto cria uma fundação sólida para a aplicação, focando em automação, segurança e escalabilidade. As seguintes tecnologias e práticas foram utilizadas:
+    - O projeto cria uma fundação sólida para a aplicação, focando em automação, segurança e escalabilidade. As seguintes tecnologias e práticas foram utilizadas
 
-* **Containerização:** Docker, para empacotar a aplicação WordPress e suas dependências de forma isolada e portátil.
-* **Integração Contínua (CI):** GitHub Actions, para automatizar o build, análise de vulnerabilidades e publicação da imagem Docker.
-* **Infraestrutura como Código (IaC):** Terraform, para provisionar e gerenciar toda a infraestrutura na AWS de forma declarativa e reprodutível.
-* **Nuvem (Cloud):** AWS, utilizando uma arquitetura serverless e gerenciada com ECS Fargate, RDS, EFS, ALB e Secrets Manager para minimizar a carga operacional.
+        - **Containerização:** Docker, para empacotar a aplicação WordPress e suas dependências de forma isolada e portátil.
 
-## 2\. Arquitetura Visual da Solução
+        - **Integração Contínua (CI):** GitHub Actions, para automatizar o build, análise de vulnerabilidades e publicação da imagem Docker.
 
-O diagrama abaixo ilustra a topologia completa da infraestrutura provisionada na AWS e o fluxo de CI/CD.
+        - **Infraestrutura como Código (IaC):** Terraform, para provisionar e gerenciar toda a infraestrutura na AWS de forma declarativa e replicável.
 
-![Diagrama da Arquitetura](./arquitetura_da_aplicação_wordpress_na_aws.png)
+        - **Nuvem (Cloud):** AWS, utilizando uma arquitetura serverless e gerenciada com Fargate, RDS, EFS, ALB e Secrets Manager para minimizar a carga operacional.
 
-### Fluxo de Implantação (CI/CD)
+2. Arquitetura Visual da Solução
 
-1. **Código e Trigger:** Um desenvolvedor envia código (`git push`) para o repositório no **GitHub**.
-2. **Pipeline:** O push aciona o workflow do **GitHub Actions**.
-3. **Build e Push:** O pipeline constrói a imagem Docker, a escaneia e a envia para um registro de contêineres (**Docker Hub**).
-4. **Deploy:** Ao executar `terraform apply`, a **Definição de Tarefa do ECS** é atualizada para usar a nova tag da imagem. O ECS então inicia uma nova tarefa puxando a imagem mais recente do registro. Essa comunicação de saída da sub-rede privada para o Docker Hub é possível graças ao **NAT Gateway**.
+    O diagrama abaixo mostra a topologia completa da infraestrutura provisionada na AWS e o fluxo de CI/CD, evidenciando a conexão entre os serviços.
 
-### Fluxo de Tráfego do Usuário (Runtime)
+    ![Diagrama da Arquitetura](./arquitetura_da_aplicação_wordpress_na_aws.png)
 
-1. **Requisição Inicial:** O usuário acessa a URL. A requisição chega ao **Internet Gateway (IGW)** e é direcionada ao **Application Load Balancer (ALB)**, que reside nas **sub-redes públicas**.
-2. **Balanceamento de Carga:** O ALB encaminha a requisição para uma tarefa do **Serviço ECS** na porta `8080`. A comunicação é controlada por Security Groups.
-3. **Execução da Aplicação:** A tarefa ECS, rodando na **sub-rede privada**, processa a requisição.
-      * **Segredos:** A tarefa busca as credenciais do banco de dados no **AWS Secrets Manager**.
-      * **Banco de Dados:** Conecta-se à instância **RDS** para buscar e salvar dados.
-      * **Arquivos:** Acessa o sistema de arquivos **EFS** para carregar e salvar uploads, temas e plugins (No caso de wordpress, é necessário persistir essas pastas de arquivos).
-4. **Resposta:** A página gerada faz o caminho de volta (ECS -\> ALB -\> IGW -\> Usuário).
+3. Containerização e análise de arquitetura do Dockerfile
 
-## 3\. Etapa 1: Containerização (Dockerfile)
+    ***Arquivo: `Dockerfile`***
 
-**Arquivo:** `Dockerfile`
+    > A containerização foi o primeiro passo, com um Dockerfile projetado com foco em segurança e otimização. As decisões tomadas aqui foram tomadas focando na performance e segurança de todo o ciclo de vida da aplicação.
 
-O primeiro passo foi containerizar a aplicação WordPress. O `Dockerfile` foi projetado com foco em segurança e otimização.
+    1. Decisões Técnicas Implementadas
 
-### Decisões Técnicas
+        - Segurança (Usuário Não-Root)
+            Para mitigar o impacto de possíveis vulnerabilidades, o contêiner executa o processo do Apache com o usuário de baixo privilégio www-data.
 
-* **Imagem Base:** Utilizamos a imagem oficial `php:8.2-apache`, que é uma base robusta, segura e mantida pela comunidade.
-* **Segurança (Usuário Não-Root):** Para mitigar o impacto de possíveis vulnerabilidades, o contêiner executa o processo do Apache com o usuário de baixo privilégio `www-data`.
-* **Porta Não Privilegiada (8080):** Como o contêiner roda com um usuário não-root, ele não tem permissão para usar portas abaixo de 1024. O Apache foi reconfigurado para escutar na porta `8080`, evitando o erro `Permission Denied` na inicialização e seguindo a prática de "menor privilégio".
+        - Porta Não Privilegiada (8080)
+            Como o contêiner roda com um usuário não-root, ele não tem permissão para usar portas abaixo de 1024. O Apache foi reconfigurado para escutar na porta 8080, seguindo a prática do "menor privilegio".
 
-## 4\. Etapa 2: Integração Contínua (CI com GitHub Actions)
+    2. Análise de decisões de arquitetura do Dockerfile
 
-**Arquivo:** `.github/workflows/main.yml`
+        - Justificativa da Imagem Base
+            > php:8.2-apache vs. outras alternativas. A escolha da imagem `php:8.2-apache` foi uma decisão intencional, baseada em manter o equilíbrio entre controle, simplicidade e segurança.
 
-Um pipeline de CI foi criado para automatizar a construção, validação e publicação da nossa imagem Docker customizada.
+        1. Comparação de alternativas
 
-### Fluxo do Pipeline
+            `wordpress:latest`
+                A imagem oficial do WordPress é uma "caixa-preta" que, apesar de ser simples, oferece menos controle sobre a configuração do Apache, as extensões PHP e otimizações de segurança. Decidi construir a imagem a partir da `php:apache` pois conseguiria demonstrar entendimento mais profundo da stack, de modo que instalei apenas as extensões PHP necessárias, tendo assim controle total sobre a configuração do servidor web, isso foi essencial para implementar ajustes de segurança como o da porta não privilegiada citada anteriormente.
 
-1. **Gatilho (Trigger):** O pipeline é acionado a cada `push` na branch `main`.
-2. **Autenticação:** Realiza o login de forma segura no Docker Hub utilizando `secrets` do GitHub.
-3. **Build da Imagem:** Constrói a imagem Docker a partir do nosso `Dockerfile`.
-4. **Análise de Vulnerabilidades:** Utiliza a ferramenta **Trivy** para escanear a imagem em busca de vulnerabilidades conhecidas (CVEs). O pipeline é configurado para falhar se vulnerabilidades de nível `HIGH` ou `CRITICAL` forem encontradas, funcionando como um portão de qualidade de segurança.
-5. **Push da Imagem:** Se a análise for bem-sucedida, a imagem validada é enviada para o Docker Hub, com uma tag correspondente à branch (`main`), garantindo rastreabilidade.
+            `php:8.2-fpm + Nginx`
+                Essa é uma arquitetura de alta performance, provavelmente seria minha escolha para um ambiente de produção real, pois ela trás ganhos significativos em questão de isolamento de funcionalidades (proxy reverso + aplicação) e robustez da arquitetura, porém exige a orquestração de dois contêineres. Para o escopo deste desafio, focado em estabelecer a fundação do CI/CD e da IaC, a imagem php:apache me pareceu uma solução mais simples e integrada em um único contêiner, reduzindo a complexidade inicial.
 
-## 5\. Etapa 3: Infraestrutura como Código (IaC com Terraform)
+            - Conclusão
+                `php:8.2-apache`
+                    Representa o melhor ponto de equilíbrio para este projeto, oferecendo o controle necessário para aplicar as melhores práticas sem adicionar complexidade desnecessária na proposta e levando em conta o estágio de modernização.
 
-**Arquivos:** `terraform/*.tf`
+    3. Análise sobre multi-stage builds (cenário atual e evolução futura)
 
-Toda a infraestrutura na AWS é gerenciada de forma declarativa com o Terraform.
+        > A ausência de multi-stage build no Dockerfile também foi uma decisão intencional.
 
-### Justificativa da Arquitetura: ECS com Fargate
+        - Partindo do cenário atual
 
-Optei por usar **AWS ECS com Fargate** em vez de EKS (Kubernetes). Para a necessidade do projeto (uma aplicação monolítica como o WordPress), Fargate oferece a melhor combinação de simplicidade operacional, custo-benefício e integração com o ecossistema AWS. Sendo uma plataforma *serverless*, ela elimina a necessidade de gerenciar a infraestrutura de nós (servidores), permitindo que a equipe foque na aplicação.
+            Um multi-stage build faria sentido ao separar o ambiente de build do ambiente de runtime, descartando ferramentas de compilação ou dependências de desenvolvimento. No nosso projeto, o código PHP é interpretado, ou seja, não há compilação e as dependências (extensões PHP) são necessárias para o runtime. Ou seja, não há uma etapa de 'build' separada onde possamos copiar artefatos, e um multi-stage build não traria benefícios significativos.
 
-## 6\. Etapa 4: Estratégia de Observabilidade
+        - Evolução futura (onde o multi stage se tornaria essencial?)
 
-Para monitorar esta aplicação em produção, a stack de ferramentas escolhida seria a **PLG Stack (Prometheus, Loki e Grafana)**, preferencialmente utilizando os serviços gerenciados da AWS (Amazon Managed Service for Prometheus e Amazon Managed Grafana).
+            Se fossemos dar o próximo passo em relação à modernização, onde faríamos o gerenciamento do core do WordPress e seus plugins via Composer. Nesse cenário, o multi-stage build se tornaria indispensável, pois o primeiro estágio usaria a imagem do composer para baixar todas as dependências, e o segundo estágio copiaria apenas o resultado final (vendor/ e os arquivos da aplicação) para a imagem `php:apache`, resultando em uma imagem final muito menor, mais segura e alinhada com as melhores práticas de desenvolvimento PHP moderno.
 
-* **Justificativa:** Esta stack é o padrão de mercado para observabilidade em ambientes cloud-native, oferecendo ferramentas poderosas e especializadas para métricas, logs e visualização em dashboards.
+4. Integração Contínua (CI) com GitHub Actions
 
-### 3 Principais Métricas para o Dashboard de Saúde
+    ***Arquivo: `.github/workflows/main.yml`***
 
-1. **Golden Signals do Tráfego (via ALB):**
-      * **Latência:** Tempo médio de resposta das requisições (mede a experiência do usuário).
-      * **Taxa de Erros:** Contagem de respostas HTTP 5xx (mede a saúde da aplicação).
-      * **Throughput:** Número de requisições por segundo (mede a carga na aplicação).
-2. **Saúde da Computação (via ECS/Fargate):**
-      * **Utilização de CPU e Memória:** Percentual de uso dos recursos alocados para os contêineres. Essencial para configurar auto-scaling e prever custos.
-3. **Saúde do Banco de Dados (via RDS):**
-      * **Utilização de CPU e Conexões Abertas:** Monitorar a carga no banco de dados, que é um gargalo comum em aplicações WordPress.
+    O pipeline de CI automatiza a construção, validação e publicação da imagem Docker, garantindo que cada alteração no código principal gere um artefato seguro e rastreável.
 
-## 7\. Como Executar a Solução
+    O fluxo consiste em:
 
-### Pré-requisitos
+    - Gatilho: Acionado a cada push na branch main.
 
-* [Docker](https://www.docker.com/)
-* [Terraform](https://www.terraform.io/)
-* [AWS CLI](https://aws.amazon.com/cli/) configurada com credenciais (`aws configure`)
+    - Build: Constrói a imagem Docker a partir do Dockerfile.
 
-#### Passos
+    - Scan de Segurança: Utiliza Trivy para escanear a imagem em busca de vulnerabilidades conhecidas, atuando como um portão de qualidade.
 
-1. **Clone este repositório:**
+    - Push: Envia a imagem validada para um container registry (Docker Hub).
 
-      ```bash
-      git clone https://github.com/Anderson-J/devops-wp.git
-      cd devops-wp
-      ```
+5. Infraestrutura como Código e Implantação Contínua (IAC & CD)
 
-2. **Navegue para a pasta do Terraform:**
+    ***Arquivos: `terraform/*.tf`***
 
-    ```bash
-    cd terraform
-    ```
+    1. Infraestrutura como Código (IaC)
 
-3. **Inicialize o Terraform:**
+        Toda a infraestrutura na AWS é gerenciada de forma declarativa com o Terraform. A arquitetura foi projetada para alta disponibilidade, utilizando duas Zonas de Disponibilidade (AZs) para distribuir recursos como sub redes, o Aplication Load Balancer (ALB) e as tarefas no ECS, garantindo que a falha de um único data center não derrube a aplicação.
 
-    ```bash
-    terraform init
-    ```
+        - Justificativa da arquitetura (ECS Fargate)
+            > A escolha pelo ECS Fargate em vez de EKS (Kubernetes) foi focada na simplicidade operacional. Fargate, sendo serverless, elimina a necessidade de gerenciar servidores, ou seja contribui diretamente para o objetivo de agilidade e redução da carga operacional.
 
-4. **Crie a infraestrutura:**
+        - Componentes
+            A arquitetura inclui
 
-    ```bash
-    terraform apply
-    ```
+            - Uma VPC customizada
+            - RDS para o banco de dados
+            - EFS para persistência de arquivos
+            - Secrets Manager para gerenciamento de senhas, tokens etc
+            - Um ALB (Aplication Load Balancer) como ponto de entrada.
 
-      * Revise o plano e digite `yes` para confirmar.
-      * Aguarde alguns minutos para que todos os recursos (VPC, RDS, ECS, etc.) sejam provisionados.
+    2. Extensão para Implantação Contínua (CD)
 
-5. **Acesse o site:**
-      * Ao final, o Terraform exibirá os outputs. Copie o valor de `URL_do_Site_WordPress` e cole no seu navegador para iniciar a instalação do WordPress.
+        O pipeline de CI é a base para a Implantação Contínua. O CD automatiza o deploy da nova imagem no ECS, eliminando o risco de erro humano e acelerando a entrega de valor.
 
-## 8\. Como Destruir a Infraestrutura
+        - Fluxo do pipeline de CD
 
-Para remover todos os recursos criados na AWS navegue até a pasta `terraform` e execute:
+            - Gatilho e Autenticação
+            > Após o sucesso do CI, um novo job de CD será iniciado. Ele se autenticaria na AWS de forma segura usando OpenID Connect (OIDC), que concede permissões temporárias ao pipeline sem a necessidade de chaves de acesso de longa duração.
 
-```bash
-terraform destroy
-```
+            - Atualização da definição de tarefa
+            > O pipeline baixa a definição da tarefa ECS existente, atualiza o campo "image" com a nova tag da imagem recém-publicada e registra uma nova versão da definição de tarefa no ECS usando aws ecs register-task-definition.
 
-* Revise os recursos a serem destruídos e digite `yes` para confirmar.
+            - Atualização do serviço ECS
+            > O passo final é instruir o serviço ECS a usar essa nova versão, forçando uma nova implantação com o comando `aws ecs update-service --force-new-deployment`.
+
+            - Implantação com zero downtime
+            > O ECS, em conjunto com o ALB, gerencia a implantação no formato ***rolling update***, então uma nova tarefa é iniciada, aguarda-se que ela se torne saudável, o tráfego é direcionado para ela, e só então a tarefa antiga é desligada.
+
+6. Estratégia de observabilidade
+
+    Para produção, a stack de ferramentas escolhida seria a PLG Stack (Prometheus, Loki e Grafana), utilizando os serviços gerenciados da AWS para garantir escalabilidade e baixa manutenção.
+
+    - As métricas essenciais para um dashboard de saúde seriam
+
+        - Tráfego (via ALB): Latência, Taxa de Erros e Throughput.
+
+        - Saúde dos recursos (via ECS): Utilização de CPU e Memória.
+
+        - Saúde do Banco de Dados (via RDS): Utilização de CPU e Conexões Abertas.
+
+7. Como Executar a Solução
+
+    - Pré-requisitos
+        Docker, Terraform, AWS CLI
+
+        - Passos
+            - Clone o repositório.
+            - Navegue para a pasta terraform e execute terraform init.
+            - Execute terraform apply e confirme com yes.
+            - Acesse o site através da URL_do_Site_WordPress exibida no output.
+
+8. Como Destruir a Infraestrutura
+
+    Para remover todos os recursos criados na AWS, navegue até a pasta terraform e execute terraform destroy.
